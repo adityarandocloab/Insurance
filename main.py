@@ -36,7 +36,7 @@ from Submission.multi_document_processor import (
 
 # Azure Document Intelligence Configuration
 endpoint = "https://ro-doc-intelligence.cognitiveservices.azure.com/"
-key = "x"
+key = "xxxxx"
 
 client = DocumentIntelligenceClient(
     endpoint=endpoint,
@@ -72,6 +72,7 @@ def main():
     documents_root = (
         Path(__file__).parent
         / "Sample_Documents"
+        / "Endorsements"
         / "Endorsements"
     )
 

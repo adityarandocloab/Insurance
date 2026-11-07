@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from azure.ai.documentintelligence import (
@@ -35,8 +36,19 @@ from Submission.multi_document_processor import (
 
 
 # Azure Document Intelligence Configuration
-endpoint = "https://ro-doc-intelligence.cognitiveservices.azure.com/"
-key = "xxxxx"
+# Set these in your shell or a .env file (never commit the key):
+#   export AZURE_DOC_INTEL_ENDPOINT="https://ro-doc-intelligence.cognitiveservices.azure.com/"
+#   export AZURE_DOC_INTEL_KEY="..."
+endpoint = os.environ.get(
+    "AZURE_DOC_INTEL_ENDPOINT",
+    "https://ro-doc-intelligence.cognitiveservices.azure.com/"
+)
+key = os.environ.get("AZURE_DOC_INTEL_KEY")
+
+if not key:
+    raise SystemExit(
+        "Set the AZURE_DOC_INTEL_KEY environment variable first."
+    )
 
 client = DocumentIntelligenceClient(
     endpoint=endpoint,

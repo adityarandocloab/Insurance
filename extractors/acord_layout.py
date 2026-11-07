@@ -64,7 +64,11 @@ def page_boxes(page):
         polygon = _get(mark, "polygon")
 
         if polygon and len(polygon) >= 8:
-            state = str(_get(mark, "state") or "").lower()
+            # The Azure SDK returns an enum (DocumentSelectionMarkState),
+            # whose str() is "DocumentSelectionMarkState.SELECTED"; use its
+            # value ("selected") so SDK objects and saved JSON agree.
+            raw_state = _get(mark, "state") or ""
+            state = str(getattr(raw_state, "value", raw_state)).lower()
             marks.append(Box("", list(polygon), state=state))
 
     if not lines:

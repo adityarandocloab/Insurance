@@ -114,3 +114,46 @@ def test_ace_end_to_end(tmp_path):
     assert checks["additional_insured"]["status"] == "MISSING"
     assert checks["certificate_holder"]["status"] == "FAIL"
     assert result["overall_status"] != "COMPLIANT"
+
+
+def test_checkbox_state_as_sdk_enum(tmp_path):
+    """The Azure SDK reports checkbox state as an enum, not plain text."""
+
+    from enum import Enum
+
+    class DocumentSelectionMarkState(str, Enum):
+        SELECTED = "selected"
+        UNSELECTED = "unselected"
+
+    result = azure_result("ace_env3101.azure.json")
+
+    for page in result.pages:
+        for mark in page.selection_marks:
+            mark.state = DocumentSelectionMarkState(mark.state)
+
+    fake_pdf = tmp_path / "ace.pdf"
+    fake_pdf.write_bytes(b"")
+    acord = process_file(fake_pdf, lambda _: result)[0]["schema"]
+    gl = acord["coverages"]["general_liability"]
+
+    assert gl["occurrence_form"] == "OCCURRENCE"
+    assert gl["aggregate_applies_per"] == "PROJECT"
+    assert acord["coverages"]["automobile_liability"]["any_auto"] is True
+
+
+def test_review_date_and_missing_workers_comp(tmp_path, monkeypatch):
+    monkeypatch.setenv("REVIEW_DATE", "2017-01-15")
+    records = records_for("ace_env3101.azure.json", tmp_path)
+    batch = associate_batch(records)
+    submission = batch["submissions"][0]
+
+    result = run_compliance_checks(
+        submission["acord_record"]["schema"],
+        [e["schema"] for e in submission["endorsement_records"]],
+    )
+    checks = result["checks"]
+
+    assert result["review_date"] == "2017-01-15"
+    assert checks["policy_dates.general_liability"]["status"] == "PASS"
+    assert checks["employers_liability.each_accident"]["status"] == "MISSING"
+    assert "policy_dates.workers_compensation" not in checks

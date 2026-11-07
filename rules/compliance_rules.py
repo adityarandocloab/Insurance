@@ -15,6 +15,7 @@
 #      an X or a sentence on the ACORD 25 does not count.
 #   2. Uncertain evidence goes to a person, it is not passed or failed.
 
+import os
 from datetime import date
 
 
@@ -129,6 +130,22 @@ def validate_employers_liability(acord_schema):
 
     wc = acord_schema["coverages"]["workers_compensation"]
     limits = RULE_SET["limits"]
+
+    if not wc.get("policy_number") and not any(
+        wc.get(field) for field in (
+            "each_accident", "disease_each_employee", "disease_policy_limit"
+        )
+    ):
+        missing = {
+            "status": "MISSING",
+            "reason": "No workers' compensation / employers liability "
+                      "policy on the certificate",
+        }
+        return {
+            "each_accident": missing,
+            "disease_each_employee": missing,
+            "disease_policy_limit": missing,
+        }
 
     return {
         "each_accident": check_minimum(
@@ -265,6 +282,11 @@ def validate_policy_dates(acord_schema, review_date):
 
         effective = coverage.get("effective_date")
         expiration = coverage.get("expiration_date")
+
+        # A coverage row left blank on the certificate is reported by its
+        # own check (e.g. workers' comp MISSING), not as a date problem.
+        if not coverage.get("policy_number") and not expiration:
+            continue
 
         if not expiration:
             results[coverage_name] = {
@@ -540,7 +562,13 @@ def run_compliance_checks(
     endorsement_schemas,
     review_date=None
 ):
-    review_date = review_date or date.today().isoformat()
+    # REVIEW_DATE lets a demo check old sample certificates as of the
+    # date they were issued, e.g.  REVIEW_DATE=2017-06-01 python3 main.py
+    review_date = (
+        review_date
+        or os.environ.get("REVIEW_DATE")
+        or date.today().isoformat()
+    )
 
     # Reported for transparency only; not used as proof.
     certificate_statements = sorted(

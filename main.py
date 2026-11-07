@@ -85,7 +85,16 @@ def analyze_document(file_path):
         except Exception as error:  # noqa: BLE001
             message = str(error)
 
-            if attempt == 3 or "401" in message:
+            # Permanent errors are not retried: a wrong key (401) or a
+            # request Azure refuses (400 InvalidRequest), which on the free
+            # F0 tier usually means the PDF is larger than 4 MB.
+            if attempt == 3 or "401" in message or "InvalidRequest" in message:
+                if "InvalidRequest" in message:
+                    size_mb = file_path.stat().st_size / 1_000_000
+                    raise RuntimeError(
+                        f"Azure rejected the file ({size_mb:.1f} MB). "
+                        "The free Azure tier only accepts files up to 4 MB."
+                    ) from error
                 raise
 
             print(

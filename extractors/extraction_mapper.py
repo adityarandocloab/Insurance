@@ -2,6 +2,7 @@ import re
 from collections import Counter
 from datetime import date
 
+from extractors.acord_layout import extract_acord_layout
 from reference.endorsement_chart import (
     lookup_form,
     normalize_form_number,
@@ -1106,9 +1107,44 @@ def extract_acord_coverages(text):
     }
 
 
-def build_acord25_schema(text, evidence_tags=None):
-    certificate_holder = extract_acord_certificate_holder(text)
+def merge_layout_coverages(text_coverages, layout_coverages):
+    """
+    Position-based values win; text-based values fill any gaps.
+    Dates from the layout reader are normalized to ISO here.
+    """
+
+    merged = {}
+
+    for name in set(text_coverages) | set(layout_coverages):
+        coverage = dict(text_coverages.get(name) or {})
+
+        for field, value in (layout_coverages.get(name) or {}).items():
+            if field in ("effective_date", "expiration_date"):
+                value = normalize_date(value)
+
+            if value is not None or field not in coverage:
+                coverage[field] = value
+
+        merged[name] = coverage
+
+    return merged
+
+
+def build_acord25_schema(text, evidence_tags=None, page=None):
+    layout = extract_acord_layout(page) if page is not None else None
+
+    certificate_holder = (
+        (layout or {}).get("certificate_holder")
+        or extract_acord_certificate_holder(text)
+    )
     description = extract_description_of_operations(text)
+
+    coverages = extract_acord_coverages(text)
+    insurers = extract_acord_insurers(text)
+
+    if layout:
+        coverages = merge_layout_coverages(coverages, layout["coverages"])
+        insurers = {**insurers, **layout["insurers"]}
 
     return {
         "document_type": "ACORD_25",
@@ -1121,8 +1157,7 @@ def build_acord25_schema(text, evidence_tags=None):
             extract_acord_named_insured(text),
         "producer":
             extract_acord_producer(text),
-        "insurers":
-            extract_acord_insurers(text),
+        "insurers": insurers,
         "certificate_holder": certificate_holder,
         "certificate_holder_check":
             check_ro_certificate_holder(certificate_holder),
@@ -1131,8 +1166,8 @@ def build_acord25_schema(text, evidence_tags=None):
             find_named_projects(description),
         "form_numbers_mentioned":
             extract_form_numbers(description or ""),
-        "coverages":
-            extract_acord_coverages(text),
+        "coverages": coverages,
+        "extraction_method": "layout" if layout else "text",
     }
 
 
@@ -1155,12 +1190,14 @@ def build_acord101_schema(text, evidence_tags=None):
 def build_document_schema(
     document_type,
     text,
-    evidence_tags=None
+    evidence_tags=None,
+    page=None
 ):
     if document_type == "ACORD_25":
         return build_acord25_schema(
             text,
-            evidence_tags
+            evidence_tags,
+            page=page
         )
 
     if document_type == "ACORD_101":

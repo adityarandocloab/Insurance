@@ -150,6 +150,104 @@ def validate_employers_liability(acord_schema):
 
 
 # ---------------------------------------------------------
+# Coverage form (checkboxes on the ACORD 25)
+# ---------------------------------------------------------
+
+def validate_gl_form(acord_schema):
+    """
+    MSA 3.B.3: GL "on an occurrence basis (claims made basis is not
+    acceptable)" and the general aggregate must apply "per project".
+    """
+
+    gl = acord_schema["coverages"]["general_liability"]
+    results = {}
+
+    form = gl.get("occurrence_form")
+
+    if form == "OCCURRENCE":
+        results["occurrence_basis"] = {
+            "status": "PASS", "reason": "GL written on an occurrence basis"}
+    elif form == "CLAIMS_MADE":
+        results["occurrence_basis"] = {
+            "status": "FAIL",
+            "reason": "GL is claims-made; the MSA requires occurrence basis"}
+    else:
+        results["occurrence_basis"] = {
+            "status": "REVIEW_REQUIRED",
+            "reason": "Could not read the OCCUR / CLAIMS-MADE checkbox"}
+
+    applies = gl.get("aggregate_applies_per")
+
+    if applies == "PROJECT":
+        results["per_project_aggregate"] = {
+            "status": "PASS",
+            "reason": "General aggregate applies per project"}
+    elif applies in ("POLICY", "LOCATION"):
+        results["per_project_aggregate"] = {
+            "status": "REVIEW_REQUIRED",
+            "reason": (
+                f"General aggregate applies per {applies.lower()}; MSA "
+                "requires per project (may be met by an endorsement)")}
+    else:
+        results["per_project_aggregate"] = {
+            "status": "REVIEW_REQUIRED",
+            "reason": "Could not read the aggregate-applies-per checkbox"}
+
+    return results
+
+
+def validate_auto_scope(acord_schema):
+    """MSA 3.B.4: owned, hired and non-owned vehicles."""
+
+    auto = acord_schema["coverages"]["automobile_liability"]
+
+    if auto.get("any_auto"):
+        return {"status": "PASS", "reason": "ANY AUTO is checked"}
+
+    covered = {
+        "owned": auto.get("owned_autos"),
+        "hired": auto.get("hired_autos"),
+        "non-owned": auto.get("non_owned_autos"),
+    }
+
+    if all(covered.values()):
+        return {
+            "status": "PASS",
+            "reason": "Owned, hired and non-owned autos are checked"}
+
+    if all(value is None for value in covered.values()):
+        return {
+            "status": "REVIEW_REQUIRED",
+            "reason": "Could not read the auto coverage checkboxes"}
+
+    missing = [name for name, value in covered.items() if not value]
+
+    return {
+        "status": "REVIEW_REQUIRED",
+        "reason": (
+            "Auto coverage checkboxes do not show: " + ", ".join(missing)
+            + " (may be covered by a scheduled-autos endorsement)")}
+
+
+def validate_workers_comp_statutory(acord_schema):
+    """MSA 3.B.1: Workers' Compensation providing statutory benefits."""
+
+    wc = acord_schema["coverages"]["workers_compensation"]
+
+    if wc.get("per_statute"):
+        return {"status": "PASS", "reason": "PER STATUTE is checked"}
+
+    if not wc.get("policy_number"):
+        return {
+            "status": "MISSING",
+            "reason": "No workers' compensation policy on the certificate"}
+
+    return {
+        "status": "REVIEW_REQUIRED",
+        "reason": "Workers' compensation listed but PER STATUTE not checked"}
+
+
+# ---------------------------------------------------------
 # Policy periods
 # ---------------------------------------------------------
 
@@ -462,6 +560,12 @@ def run_compliance_checks(
             validate_umbrella(acord_schema),
         "employers_liability":
             validate_employers_liability(acord_schema),
+        "general_liability_form":
+            validate_gl_form(acord_schema),
+        "automobile_scope":
+            validate_auto_scope(acord_schema),
+        "workers_compensation_statutory":
+            validate_workers_comp_statutory(acord_schema),
         "policy_dates":
             validate_policy_dates(acord_schema, review_date),
         "certificate_holder":

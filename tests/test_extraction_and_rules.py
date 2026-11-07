@@ -112,10 +112,11 @@ def make_acord(**overrides):
                 "effective_date": "2026-01-01", "expiration_date": "2027-01-01",
                 "each_occurrence": "1000000", "general_aggregate": "2000000",
                 "products_completed_operations": "2000000",
+                "occurrence_form": "OCCURRENCE", "aggregate_applies_per": "PROJECT",
             },
             "automobile_liability": {
                 "effective_date": "2026-01-01", "expiration_date": "2027-01-01",
-                "combined_single_limit": "1000000",
+                "combined_single_limit": "1000000", "any_auto": True,
             },
             "umbrella_excess": {
                 "effective_date": "2026-01-01", "expiration_date": "2027-01-01",
@@ -125,6 +126,7 @@ def make_acord(**overrides):
                 "effective_date": "2026-01-01", "expiration_date": "2027-01-01",
                 "each_accident": "1000000", "disease_each_employee": "1000000",
                 "disease_policy_limit": "1000000",
+                "policy_number": "WC123456", "per_statute": True,
             },
         },
     }
@@ -231,3 +233,10 @@ def test_continuation_page_joins_endorsement(tmp_path):
     assert len(records) == 1
     assert records[0]["page_numbers"] == [1, 2]
     assert "PRIMARY_NONCONTRIBUTORY" in records[0]["evidence_tags"]
+
+
+def test_claims_made_gl_fails():
+    acord = make_acord()
+    acord["coverages"]["general_liability"]["occurrence_form"] = "CLAIMS_MADE"
+    result = run_compliance_checks(acord, GOOD_ENDORSEMENTS, review_date="2026-11-05")
+    assert result["checks"]["general_liability_form.occurrence_basis"]["status"] == "FAIL"

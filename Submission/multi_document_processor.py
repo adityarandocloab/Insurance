@@ -94,7 +94,8 @@ def process_file(
         schema = build_document_schema(
             classification["page_type"],
             page_text,
-            classification["evidence_tags"]
+            classification["evidence_tags"],
+            page=page
         )
 
         record = {

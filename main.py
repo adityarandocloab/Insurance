@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 from azure.ai.documentintelligence import (
@@ -69,14 +70,29 @@ def analyze_document(file_path):
             f"Document was not found: {file_path.resolve()}"
         )
 
-    with file_path.open("rb") as document_file:
+    # Connection resets and rate limits (HTTP 429) are temporary, so each
+    # file gets three tries before it is reported as a file error.
+    # A wrong key (HTTP 401) is not retried.
+    for attempt in range(1, 4):
+        try:
+            with file_path.open("rb") as document_file:
+                poller = client.begin_analyze_document(
+                    "prebuilt-layout",
+                    body=document_file
+                )
+                return poller.result()
 
-        poller = client.begin_analyze_document(
-            "prebuilt-layout",
-            body=document_file
-        )
+        except Exception as error:  # noqa: BLE001
+            message = str(error)
 
-        return poller.result()
+            if attempt == 3 or "401" in message:
+                raise
+
+            print(
+                f"  Retrying {file_path.name} "
+                f"(attempt {attempt + 1} of 3): {message[:80]}"
+            )
+            time.sleep(5 * attempt)
 
 
 def main():
